@@ -25,7 +25,11 @@ async function request(type, options = {}) {
     if (!token) throw new Error('Authentication required.')
     headers.Authorization = `Bearer ${token}`
   }
-  const response = await fetch(`${endpoint}?type=${type}`, { ...options, headers, body: options.body && JSON.stringify({ ...options.body, type }) })
+  const response = await fetch(`${endpoint}?type=${type}`, {
+    ...options,
+    headers,
+    body: options.body ? JSON.stringify({ ...options.body, type }) : undefined,
+  })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload.error || `Content request failed (${response.status}).`)
   return payload
@@ -42,7 +46,8 @@ export async function fetchGallery(options = {}) {
 }
 
 export async function saveStory(story) {
-  const { item } = await request('stories', { method: story.id && /^[a-f\d]{24}$/i.test(String(story.id)) ? 'PUT' : 'POST', admin: true, body: story })
+  const isMongoDocument = story.id && /^[a-f\d]{24}$/i.test(String(story.id))
+  const { item } = await request('stories', { method: isMongoDocument ? 'PUT' : 'POST', admin: true, body: story })
   return mapStory(item)
 }
 
@@ -51,7 +56,8 @@ export async function deleteStory(id) {
 }
 
 export async function saveGalleryItem(item) {
-  const { item: saved } = await request('gallery', { method: item.id && /^[a-f\d]{24}$/i.test(String(item.id)) ? 'PUT' : 'POST', admin: true, body: item })
+  const isMongoDocument = item.id && /^[a-f\d]{24}$/i.test(String(item.id))
+  const { item: saved } = await request('gallery', { method: isMongoDocument ? 'PUT' : 'POST', admin: true, body: item })
   return mapGallery(saved)
 }
 
