@@ -24,3 +24,4 @@ footer { border-top: 1px solid var(--line); padding-top: 26px; padding-bottom: 3
 @media (max-width: 800px) { .assistant-panel { width: calc(100vw - 24px); height: min(700px, calc(100vh - 80px)); } }
 .admin-image-preview { display: block; width: min(260px, 100%); max-height: 180px; object-fit: cover; margin: 8px 0 16px; border: 1px solid var(--line); }.gallery-preview { width: min(320px, 100%); max-height: 240px; }
 .save-confirmation { display: inline-block; margin-left: 10px; color: #668c1f; font-size: 11px; }
+.admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 4px; }.admin-actions .save-confirmation { margin-left: 0; }.delete-button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #b5483e; padding: 9px 12px; font-size: 11px; }.delete-button:hover { color: #8f3028; background: rgba(181,72,62,.07); }
