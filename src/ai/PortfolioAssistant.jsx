@@ -1,16 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowUpRight, MessageCircle, Send } from 'lucide-react'
-
-const assistantSuggestions = [
-  'What are his coding skills?',
-  'What projects has he made?',
-  'What are his hobbies and talents?',
-  'Can he build cloud infrastructure?',
-  'What programming languages does Deepak know?',
-  'What technologies are listed in his resume?',
-  'What is Deepak’s professional experience?',
-  'What certifications does Deepak have?',
-]
+import { getStored, initialAssistantSuggestions } from '../lib/storage'
 
 function renderAssistantText(text) {
   return text.split('\n').map((line, lineIndex) => {
@@ -43,6 +33,7 @@ function BotIcon() {
 }
 
 export default function PortfolioAssistant({ getContext }) {
+  const [assistantSuggestions, setAssistantSuggestions] = useState(() => getStored('wwi-ai-suggestions', initialAssistantSuggestions))
   const [open, setOpen] = useState(false)
   const [showWelcome, setShowWelcome] = useState(true)
   const [input, setInput] = useState('')
@@ -55,6 +46,12 @@ export default function PortfolioAssistant({ getContext }) {
   useEffect(() => {
     const timeout = window.setTimeout(() => setShowWelcome(false), 9000)
     return () => window.clearTimeout(timeout)
+  }, [])
+
+  useEffect(() => {
+    const handleSuggestionsUpdated = () => setAssistantSuggestions(getStored('wwi-ai-suggestions', initialAssistantSuggestions))
+    window.addEventListener('wwi-ai-suggestions-updated', handleSuggestionsUpdated)
+    return () => window.removeEventListener('wwi-ai-suggestions-updated', handleSuggestionsUpdated)
   }, [])
 
   useEffect(() => {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, BookOpen, Camera, Check, FileText, LayoutDashboard, LogOut, Plus, Save, Trash2, UserRound } from 'lucide-react'
+import { ArrowUpRight, BookOpen, Camera, Check, FileText, LayoutDashboard, LogOut, Plus, Save, Sparkles, Trash2, UserRound } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { fetchRealtimeAnalytics } from '../../lib/analytics'
 import { auth, signOut } from '../../lib/firebase'
-import { gallery, getStored, initialPosts, initialProfile, initialProjects } from '../../lib/storage'
+import { gallery, getStored, initialAssistantSuggestions, initialPosts, initialProfile, initialProjects } from '../../lib/storage'
 import { toDisplayImageUrl } from '../../lib/imageUrl'
+import { deleteStory, fetchStories, saveStory } from '../../lib/contentApi'
 
 function openResume(resume) {
   if (!resume) return
@@ -26,7 +27,21 @@ export default function Admin() {
   const [resume, setResume] = useState(() => localStorage.getItem('wwi-resume') || '')
   const [saved, setSaved] = useState(false)
   const [savedItem, setSavedItem] = useState('')
+  const [contentError, setContentError] = useState('')
+  const [publishingId, setPublishingId] = useState(null)
   const [realtime, setRealtime] = useState({ status: 'loading', activeUsers: 0 })
+  const [assistantSuggestions, setAssistantSuggestions] = useState(() => getStored('wwi-ai-suggestions', initialAssistantSuggestions))
+  const [suggestionsSaved, setSuggestionsSaved] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetchStories({ admin: true }).then((stories) => {
+      if (active) setPosts(stories)
+    }).catch((error) => {
+      if (active) setContentError(`Unable to load stories from MongoDB: ${error.message}`)
+    })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -45,7 +60,7 @@ export default function Admin() {
   }
 
   function addPost() {
-    setPosts([{ id: Date.now(), category: 'New note', title: 'A new story waiting to be written', excerpt: 'Add a subtitle for your story.', content: 'Write the full story here.', image: '', date: 'Draft', read: '1 min read', color: 'from-slate-500 to-slate-700', published: false }, ...posts])
+    setPosts([{ id: Date.now(), category: 'New note', title: '', excerpt: '', content: '', image: '', date: 'Draft', read: '1 min read', color: 'from-slate-500 to-slate-700', published: false }, ...posts])
   }
 
   function addPhoto() {
@@ -62,15 +77,54 @@ export default function Admin() {
     setSaved(true); setTimeout(() => setSaved(false), 1800)
   }
 
-  function saveContent(kind, item) {
-    const label = kind === 'story' ? `Story "${item.title}" saved` : `Photo "${item.label}" saved`
+  function saveAssistantSuggestions() {
+    const suggestions = assistantSuggestions.map((suggestion) => suggestion.trim()).filter(Boolean)
+    setAssistantSuggestions(suggestions)
+    localStorage.setItem('wwi-ai-suggestions', JSON.stringify(suggestions))
+    window.dispatchEvent(new Event('wwi-ai-suggestions-updated'))
+    setSuggestionsSaved(true)
+    window.setTimeout(() => setSuggestionsSaved(false), 1800)
+  }
+
+  async function saveContent(kind, item) {
+    if (kind === 'story') {
+      const storyToPublish = { ...item, published: true }
+      if (!storyToPublish.title?.trim() || !storyToPublish.content?.trim()) {
+        setContentError('Add a header title and full story before publishing.')
+        return
+      }
+      setPublishingId(item.id)
+      try {
+        const savedStory = await saveStory(storyToPublish)
+        setPosts((items) => items.map((value) => value.id === item.id ? savedStory : value))
+        setContentError('')
+        setSavedItem(`Story "${savedStory.title}" published`)
+        window.setTimeout(() => setSavedItem(''), 1800)
+      } catch (error) {
+        setContentError(`Unable to publish story to MongoDB: ${error.message}`)
+      } finally {
+        setPublishingId(null)
+      }
+      return
+    }
+    const label = `Photo "${item.label}" saved`
     const key = kind === 'story' ? 'wwi-posts' : 'wwi-gallery'
     localStorage.setItem(key, JSON.stringify(kind === 'story' ? posts : photos))
     setSavedItem(label)
     window.setTimeout(() => setSavedItem(''), 1800)
   }
 
-  function removeContent(kind, item) {
+  async function removeContent(kind, item) {
+    if (kind === 'story') {
+      try {
+        if (/^[a-f\d]{24}$/i.test(String(item.id))) await deleteStory(item.id)
+        const next = posts.filter((value) => value.id !== item.id)
+        setPosts(next)
+      } catch (error) {
+        setContentError(`Unable to delete story from MongoDB: ${error.message}`)
+      }
+      return
+    }
     const key = kind === 'story' ? 'wwi-posts' : 'wwi-gallery'
     if (kind === 'story') {
       const next = posts.filter((value) => value.id !== item.id)
@@ -87,9 +141,11 @@ export default function Admin() {
     await signOut(auth); sessionStorage.removeItem('wwi-admin'); sessionStorage.removeItem('wwi-admin-email'); navigate('/admin/login')
   }
 
-  return <div className="admin-shell"><aside className="admin-sidebar"><Link to="/" className="brand"><span className="brand-mark">D</span><span>Deepak<span className="brand-dot">.</span></span></Link><div className="sidebar-label">WORKSPACE</div><NavLink to="/admin" end><LayoutDashboard size={17} /> Overview</NavLink><a href="#posts"><BookOpen size={17} /> Posts <span className="nav-count">{posts.length}</span></a><a href="#gallery"><Camera size={17} /> Gallery <span className="nav-count">{photos.length}</span></a><a href="#projects"><BookOpen size={17} /> Projects <span className="nav-count">{projects.length}</span></a><a href="#profile"><UserRound size={17} /> Profile</a><a href="#resume"><FileText size={17} /> Resume</a><div className="sidebar-bottom"><button onClick={logout}><LogOut size={17} /> Sign out</button></div></aside><div className="admin-content"><div className="admin-topbar"><span className="mobile-admin-title">Deepak Studio / Workspace</span><span className="admin-status"><span className="status-dot" /> Your site is live</span><Link to="/" className="view-site">View site <ArrowUpRight size={14} /></Link></div><div className="admin-main"><div className="admin-heading"><div><p className="eyebrow">SUNDAY, SEPTEMBER 13, 2026</p><h1>Good morning, {profile.name.split(' ')[0]}.</h1><p className="muted">Here’s what’s happening with your site.</p></div><button className="button button-dark" onClick={addPost}><Plus size={16} /> New post</button></div><div className="stats-row"><div><span>Total posts</span><strong>{posts.length}</strong></div><div><span>Gallery photos</span><strong>{photos.length}</strong></div><div><span>Visitors right now</span><strong>{realtime.status === 'ready' ? realtime.activeUsers : '—'}</strong></div></div>
+  return <div className="admin-shell"><aside className="admin-sidebar"><Link to="/" className="brand"><span className="brand-mark">D</span><span>Deepak<span className="brand-dot">.</span></span></Link><div className="sidebar-label">WORKSPACE</div><NavLink to="/admin" end><LayoutDashboard size={17} /> Overview</NavLink><a href="#posts"><BookOpen size={17} /> Posts <span className="nav-count">{posts.length}</span></a><a href="#gallery"><Camera size={17} /> Gallery <span className="nav-count">{photos.length}</span></a><a href="#projects"><BookOpen size={17} /> Projects <span className="nav-count">{projects.length}</span></a><a href="#profile"><UserRound size={17} /> Profile</a><a href="#resume"><FileText size={17} /> Resume</a><a href="#ai-suggestions"><Sparkles size={17} /> AI suggestions</a><div className="sidebar-bottom"><button onClick={logout}><LogOut size={17} /> Sign out</button></div></aside><div className="admin-content"><div className="admin-topbar"><span className="mobile-admin-title">Deepak Studio / Workspace</span><span className="admin-status"><span className="status-dot" /> Your site is live</span><Link to="/" className="view-site">View site <ArrowUpRight size={14} /></Link></div><div className="admin-main"><div className="admin-heading"><div><p className="eyebrow">SUNDAY, SEPTEMBER 13, 2026</p><h1>Good morning, {profile.name.split(' ')[0]}.</h1><p className="muted">Here’s what’s happening with your site.</p></div><button className="button button-dark" onClick={addPost}><Plus size={16} /> New post</button></div>{contentError && <div className="error-banner" role="alert">{contentError}</div>}<div className="stats-row"><div><span>Total posts</span><strong>{posts.length}</strong></div><div><span>Gallery photos</span><strong>{photos.length}</strong></div><div><span>Visitors right now</span><strong>{realtime.status === 'ready' ? realtime.activeUsers : '—'}</strong></div></div>
 
-  <section className="admin-panel" id="posts"><div className="panel-heading"><h2>Recent posts</h2><button className="subtle-button" onClick={addPost}><Plus size={14} /> Add post</button></div>{posts.map((post) => <div className="admin-post" key={post.id}><div><label className="admin-label">Header / title<input value={post.title || ''} onChange={(e) => update(setPosts, posts, post.id, 'title', e.target.value)} /></label><label className="admin-label">Category<input value={post.category || ''} onChange={(e) => update(setPosts, posts, post.id, 'category', e.target.value)} /></label><label className="admin-label">Subtitle<textarea value={post.excerpt || ''} onChange={(e) => update(setPosts, posts, post.id, 'excerpt', e.target.value)} rows="2" /></label><label className="admin-label">Story image URL<input type="url" placeholder="https://... or Google Drive share link" value={post.image || ''} onChange={(e) => update(setPosts, posts, post.id, 'image', e.target.value)} /></label>{post.image && <img className="admin-image-preview" src={toDisplayImageUrl(post.image)} alt="Story preview" />}<label className="admin-label">Full story<textarea value={post.content || ''} onChange={(e) => update(setPosts, posts, post.id, 'content', e.target.value)} rows="8" /></label><label className="admin-label"><input type="checkbox" checked={Boolean(post.published)} onChange={(e) => update(setPosts, posts, post.id, 'published', e.target.checked)} /> Published</label><div className="admin-actions"><button type="button" className="save-button" onClick={() => saveContent('story', post)}><Save size={15} /> {savedItem === `Story "${post.title}" saved` ? 'Saved' : 'Save story'}</button>{savedItem.startsWith(`Story "${post.title}"`) && <span className="save-confirmation">{savedItem}</span>}<button type="button" className="delete-button" onClick={() => removeContent('story', post)}><Trash2 size={14} /> Delete story</button></div></div></div>)}</section>
+  <section className="admin-panel ai-suggestions-panel" id="ai-suggestions"><div className="panel-heading"><div><h2>AI suggestions</h2><p className="muted">Edit the quick questions shown in the AI bot. Use one suggestion per line.</p></div><button className="save-button" onClick={saveAssistantSuggestions}>{suggestionsSaved ? <Check size={15} /> : <Save size={15} />} {suggestionsSaved ? 'Saved' : 'Save suggestions'}</button></div><textarea className="ai-suggestions-editor" value={assistantSuggestions.join('\n')} onChange={(event) => setAssistantSuggestions(event.target.value.split(/\r?\n/))} rows="8" aria-label="AI bot suggestions" /></section>
+
+  <section className="admin-panel" id="posts"><div className="panel-heading"><h2>Recent posts</h2><button className="subtle-button" onClick={addPost}><Plus size={14} /> Add post</button></div>{posts.map((post) => <div className="admin-post" key={post.id}><div><label className="admin-label">Header / title<input value={post.title || ''} onChange={(e) => update(setPosts, posts, post.id, 'title', e.target.value)} /></label><label className="admin-label">Category<input value={post.category || ''} onChange={(e) => update(setPosts, posts, post.id, 'category', e.target.value)} /></label><label className="admin-label">Subtitle<textarea value={post.excerpt || ''} onChange={(e) => update(setPosts, posts, post.id, 'excerpt', e.target.value)} rows="2" /></label><label className="admin-label">Story image URL<input type="url" placeholder="https://... or Google Drive share link" value={post.image || ''} onChange={(e) => update(setPosts, posts, post.id, 'image', e.target.value)} /></label>{post.image && <img className="admin-image-preview" src={toDisplayImageUrl(post.image)} alt="Story preview" />}<label className="admin-label">Full story<textarea value={post.content || ''} onChange={(e) => update(setPosts, posts, post.id, 'content', e.target.value)} rows="8" /></label><div className="admin-actions"><button type="button" className="save-button" disabled={publishingId === post.id} onClick={() => saveContent('story', post)}><Save size={15} /> {publishingId === post.id ? 'Publishing...' : savedItem === `Story "${post.title}" published` ? 'Published' : 'Publish story'}</button>{savedItem.startsWith(`Story "${post.title}"`) && <span className="save-confirmation">{savedItem}</span>}<button type="button" className="delete-button" onClick={() => removeContent('story', post)}><Trash2 size={14} /> Delete story</button></div></div></div>)}</section>
 
   <section className="admin-panel" id="profile"><div className="panel-heading"><h2>Edit profile</h2><button className="save-button" onClick={saveProfile}>{saved ? <Check size={15} /> : <Save size={15} />} {saved ? 'Saved' : 'Save profile'}</button></div><label className="admin-label">Name<input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></label><label className="admin-label">Role / tagline<input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} /></label><label className="admin-label">Bio<textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} rows="4" /></label></section>
 

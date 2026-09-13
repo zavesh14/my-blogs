@@ -2,6 +2,16 @@ export const initialPosts = []
 export const initialProjects = []
 export const gallery = []
 export const initialProfile = { name: '', role: '', bio: '', photo: '' }
+export const initialAssistantSuggestions = [
+  'What are his coding skills?',
+  'What projects has he made?',
+  'What are his hobbies and talents?',
+  'Can he build cloud infrastructure?',
+  'What programming languages does Deepak know?',
+  'What technologies are listed in his resume?',
+  'What is Deepak’s professional experience?',
+  'What certifications does Deepak have?',
+]
 
 export function getStored(key, fallback) {
   return JSON.parse(localStorage.getItem(key) || 'null') || fallback

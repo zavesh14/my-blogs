@@ -59,7 +59,7 @@ my-blogs/
 ### Main runtime flow
 
 1. The browser loads the React application.
-2. Public stories and gallery content are loaded from localStorage.
+2. Public stories are loaded from MongoDB through the Netlify content function; localStorage is retained as a fallback.
 3. Admin login uses Firebase Google Authentication.
 4. The admin workspace is additionally checked against `VITE_ADMIN_EMAIL`.
 5. Chat requests go to `/.netlify/functions/portfolio-chat`.
