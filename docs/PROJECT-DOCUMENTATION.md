@@ -59,7 +59,7 @@ my-blogs/
 ### Main runtime flow
 
 1. The browser loads the React application.
-2. Public content is read from localStorage and environment-configured social links.
+2. Public stories and gallery content are fetched from MongoDB through a Netlify function, with localStorage retained as an offline fallback.
 3. Admin login uses Firebase Google Authentication.
 4. The admin workspace is additionally checked against `VITE_ADMIN_EMAIL`.
 5. Chat requests go to `/.netlify/functions/portfolio-chat`.
@@ -123,6 +123,7 @@ Environment variables are divided into browser-safe `VITE_` values and server-on
 | `VITE_ADMIN_EMAIL` | Yes | Authorized Google account for the admin UI |
 | `VITE_CHAT_ENDPOINT` | Optional | Defaults to `/.netlify/functions/portfolio-chat` |
 | `VITE_ANALYTICS_ENDPOINT` | Optional | Defaults to `/.netlify/functions/analytics-realtime` |
+| `VITE_CONTENT_ENDPOINT` | Optional | Defaults to `/.netlify/functions/content` |
 | `VITE_GITHUB_URL` | Recommended | Public GitHub profile URL |
 | `VITE_LINKEDIN_URL` | Recommended | Public LinkedIn profile URL |
 
@@ -136,6 +137,10 @@ Environment variables are divided into browser-safe `VITE_` values and server-on
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Required for analytics | Firebase Admin service-account JSON |
 | `GA4_PROPERTY_ID` | Required for analytics | Numeric GA4 property ID |
 | `ADMIN_EMAIL` | Required for analytics | Server-side admin email allowlist |
+| `MONGODB_URI` | Required for stories/gallery | MongoDB connection string; keep server-only |
+| `MONGODB_DB_NAME` | Optional | Defaults to `blogs` |
+| `MONGODB_STORY_COLLECTION` | Optional | Defaults to `my-blogs` |
+| `MONGODB_GALLERY_COLLECTION` | Optional | Defaults to `gallery` |
 
 ### Missing values to replace
 
@@ -151,6 +156,10 @@ The following placeholders must be replaced before production deployment:
 - `GA4_PROPERTY_ID`.
 
 Do not commit `.env`. Do not place `OPENAI_API_KEY` or `FIREBASE_SERVICE_ACCOUNT_JSON` in variables beginning with `VITE_`; Vite exposes `VITE_` values to the browser.
+
+### MongoDB content API
+
+The `/.netlify/functions/content` endpoint serves only documents with `published: true` for public GET requests. Admin create, update, and delete requests require a Firebase ID token and an email matching `ADMIN_EMAIL` (or `VITE_ADMIN_EMAIL` when the server-side variable is not set). Story documents use `title`, `slug`, `category`, `subtitle`/`excerpt`, `content`, `coverImageUrl`/`image`, `published`, `publishedAt`, and `readTimeMinutes`; gallery documents use `title`/`label`, `caption`, `imageUrl`/`src`, `altText`, `sortOrder`, and `published`. Base64 image data is supported for now with a 4 MB client-side file limit and a 6 MB function body limit.
 
 ---
 
@@ -321,4 +330,3 @@ Stop stale Vite/Netlify processes, then run one clean `npm.cmd run dev:netlify` 
 - [ ] Chatbot scope guard is tested.
 - [ ] Analytics authentication is tested.
 - [ ] Netlify deploy preview and production site are checked.
-
