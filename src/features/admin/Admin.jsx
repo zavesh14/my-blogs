@@ -33,13 +33,16 @@ export default function Admin() {
   const [resume, setResume] = useState(() => localStorage.getItem('wwi-resume') || '')
   const [saved, setSaved] = useState(false)
   const [savedItem, setSavedItem] = useState('')
+  const [contentError, setContentError] = useState('')
   const [realtime, setRealtime] = useState({ status: 'loading', activeUsers: 0 })
 
   useEffect(() => {
     let active = true
     Promise.all([fetchStories({ admin: true }), fetchGallery({ admin: true })]).then(([stories, galleryItems]) => {
       if (active) { setPosts(stories); setPhotos(galleryItems) }
-    }).catch(() => {})
+    }).catch((error) => {
+      if (active) setContentError(`Unable to load MongoDB content: ${error.message}`)
+    })
     return () => { active = false }
   }, [])
 
@@ -78,26 +81,26 @@ export default function Admin() {
   }
 
   async function saveContent(kind, item) {
-    const label = kind === 'story' ? `Story "${item.title}" uploaded` : `Photo "${item.label}" uploaded`
+    const label = kind === 'story' ? `Story "${item.title}" saved` : `Photo "${item.label}" saved`
+    setContentError('')
     try {
       const savedContent = kind === 'story' ? await saveStory(item) : await saveGalleryItem(item)
       if (kind === 'story') setPosts((items) => items.map((value) => value.id === item.id ? savedContent : value))
       else setPhotos((items) => items.map((value) => value.id === item.id ? savedContent : value))
       setSavedItem(label)
       window.setTimeout(() => setSavedItem(''), 1800)
-    } catch {
-      const key = kind === 'story' ? 'wwi-posts' : 'wwi-gallery'
-      localStorage.setItem(key, JSON.stringify(kind === 'story' ? posts : photos))
-      setSavedItem(`${label} (saved locally)`)
-      window.setTimeout(() => setSavedItem(''), 2200)
+    } catch (error) {
+      setContentError(`Unable to save ${kind}: ${error.message}`)
     }
   }
 
   async function removeContent(kind, item) {
+    setContentError('')
     try {
       if (String(item.id).match(/^[a-f\d]{24}$/i)) await (kind === 'story' ? deleteStory(item.id) : deleteGalleryItem(item.id))
-    } catch {
-      localStorage.setItem(kind === 'story' ? 'wwi-posts' : 'wwi-gallery', JSON.stringify(kind === 'story' ? posts : photos))
+    } catch (error) {
+      setContentError(`Unable to delete ${kind}: ${error.message}`)
+      return
     }
     if (kind === 'story') setPosts((items) => items.filter((value) => value.id !== item.id))
     else setPhotos((items) => items.filter((value) => value.id !== item.id))
@@ -107,9 +110,9 @@ export default function Admin() {
     await signOut(auth); sessionStorage.removeItem('wwi-admin'); sessionStorage.removeItem('wwi-admin-email'); navigate('/admin/login')
   }
 
-  return <div className="admin-shell"><aside className="admin-sidebar"><Link to="/" className="brand"><span className="brand-mark">D</span><span>Deepak<span className="brand-dot">.</span></span></Link><div className="sidebar-label">WORKSPACE</div><NavLink to="/admin" end><LayoutDashboard size={17} /> Overview</NavLink><a href="#posts"><BookOpen size={17} /> Posts <span className="nav-count">{posts.length}</span></a><a href="#gallery"><Camera size={17} /> Gallery <span className="nav-count">{photos.length}</span></a><a href="#projects"><BookOpen size={17} /> Projects <span className="nav-count">{projects.length}</span></a><a href="#profile"><UserRound size={17} /> Profile</a><a href="#resume"><FileText size={17} /> Resume</a><div className="sidebar-bottom"><button onClick={logout}><LogOut size={17} /> Sign out</button></div></aside><div className="admin-content"><div className="admin-topbar"><span className="mobile-admin-title">Deepak Studio / Workspace</span><span className="admin-status"><span className="status-dot" /> Your site is live</span><Link to="/" className="view-site">View site <ArrowUpRight size={14} /></Link></div><div className="admin-main"><div className="admin-heading"><div><p className="eyebrow">SUNDAY, SEPTEMBER 13, 2026</p><h1>Good morning, {profile.name.split(' ')[0]}.</h1><p className="muted">Here’s what’s happening with your site.</p></div><button className="button button-dark" onClick={addPost}><Plus size={16} /> New post</button></div><div className="stats-row"><div><span>Total posts</span><strong>{posts.length}</strong></div><div><span>Gallery photos</span><strong>{photos.length}</strong></div><div><span>Visitors right now</span><strong>{realtime.status === 'ready' ? realtime.activeUsers : '—'}</strong></div></div>
+  return <div className="admin-shell"><aside className="admin-sidebar"><Link to="/" className="brand"><span className="brand-mark">D</span><span>Deepak<span className="brand-dot">.</span></span></Link><div className="sidebar-label">WORKSPACE</div><NavLink to="/admin" end><LayoutDashboard size={17} /> Overview</NavLink><a href="#posts"><BookOpen size={17} /> Posts <span className="nav-count">{posts.length}</span></a><a href="#gallery"><Camera size={17} /> Gallery <span className="nav-count">{photos.length}</span></a><a href="#projects"><BookOpen size={17} /> Projects <span className="nav-count">{projects.length}</span></a><a href="#profile"><UserRound size={17} /> Profile</a><a href="#resume"><FileText size={17} /> Resume</a><div className="sidebar-bottom"><button onClick={logout}><LogOut size={17} /> Sign out</button></div></aside><div className="admin-content"><div className="admin-topbar"><span className="mobile-admin-title">Deepak Studio / Workspace</span><span className="admin-status"><span className="status-dot" /> Your site is live</span><Link to="/" className="view-site">View site <ArrowUpRight size={14} /></Link></div><div className="admin-main"><div className="admin-heading"><div><p className="eyebrow">SUNDAY, SEPTEMBER 13, 2026</p><h1>Good morning, {profile.name.split(' ')[0]}.</h1><p className="muted">Here’s what’s happening with your site.</p></div><button className="button button-dark" onClick={addPost}><Plus size={16} /> New post</button></div>{contentError && <div className="error-banner" role="alert">{contentError}</div>}<div className="stats-row"><div><span>Total posts</span><strong>{posts.length}</strong></div><div><span>Gallery photos</span><strong>{photos.length}</strong></div><div><span>Visitors right now</span><strong>{realtime.status === 'ready' ? realtime.activeUsers : '—'}</strong></div></div>
 
-  <section className="admin-panel" id="posts"><div className="panel-heading"><h2>Recent posts</h2><button className="subtle-button" onClick={addPost}><Plus size={14} /> Add post</button></div>{posts.map((post) => <div className="admin-post" key={post.id}><div><label className="admin-label">Header / title<input value={post.title || ''} onChange={(e) => update(setPosts, posts, post.id, 'title', e.target.value)} /></label><label className="admin-label">Category<input value={post.category || ''} onChange={(e) => update(setPosts, posts, post.id, 'category', e.target.value)} /></label><label className="admin-label">Subtitle<textarea value={post.excerpt || ''} onChange={(e) => update(setPosts, posts, post.id, 'excerpt', e.target.value)} rows="2" /></label><label className="admin-label">Story image<input type="file" accept="image/*" onChange={(e) => readImage(e.target.files?.[0], (image) => update(setPosts, posts, post.id, 'image', image))} /></label>{post.image && <img className="admin-image-preview" src={post.image} alt="Story preview" />}<label className="admin-label">Full story<textarea value={post.content || ''} onChange={(e) => update(setPosts, posts, post.id, 'content', e.target.value)} rows="8" /></label><label className="admin-label"><input type="checkbox" checked={Boolean(post.published)} onChange={(e) => update(setPosts, posts, post.id, 'published', e.target.checked)} /> Published</label><div className="admin-actions"><button type="button" className="save-button" onClick={() => saveContent('story', post)}><Save size={15} /> {savedItem === `Story "${post.title}" uploaded` ? 'Uploaded' : 'Upload story'}</button>{savedItem.startsWith(`Story "${post.title}"`) && <span className="save-confirmation">{savedItem}</span>}<button type="button" className="delete-button" onClick={() => removeContent('story', post)}><Trash2 size={14} /> Delete story</button></div></div></div>)}</section>
+  <section className="admin-panel" id="posts"><div className="panel-heading"><h2>Recent posts</h2><button className="subtle-button" onClick={addPost}><Plus size={14} /> Add post</button></div>{posts.map((post) => <div className="admin-post" key={post.id}><div><label className="admin-label">Header / title<input value={post.title || ''} onChange={(e) => update(setPosts, posts, post.id, 'title', e.target.value)} /></label><label className="admin-label">Category<input value={post.category || ''} onChange={(e) => update(setPosts, posts, post.id, 'category', e.target.value)} /></label><label className="admin-label">Subtitle<textarea value={post.excerpt || ''} onChange={(e) => update(setPosts, posts, post.id, 'excerpt', e.target.value)} rows="2" /></label><label className="admin-label">Story image<input type="file" accept="image/*" onChange={(e) => readImage(e.target.files?.[0], (image) => update(setPosts, posts, post.id, 'image', image))} /></label>{post.image && <img className="admin-image-preview" src={post.image} alt="Story preview" />}<label className="admin-label">Full story<textarea value={post.content || ''} onChange={(e) => update(setPosts, posts, post.id, 'content', e.target.value)} rows="8" /></label><label className="admin-label"><input type="checkbox" checked={Boolean(post.published)} onChange={(e) => update(setPosts, posts, post.id, 'published', e.target.checked)} /> Published</label><div className="admin-actions"><button type="button" className="save-button" onClick={() => saveContent('story', post)}><Save size={15} /> {savedItem === `Story "${post.title}" saved` ? 'Saved' : 'Save story'}</button>{savedItem.startsWith(`Story "${post.title}"`) && <span className="save-confirmation">{savedItem}</span>}<button type="button" className="delete-button" onClick={() => removeContent('story', post)}><Trash2 size={14} /> Delete story</button></div></div></div>)}</section>
 
   <section className="admin-panel" id="profile"><div className="panel-heading"><h2>Edit profile</h2><button className="save-button" onClick={saveProfile}>{saved ? <Check size={15} /> : <Save size={15} />} {saved ? 'Saved' : 'Save profile'}</button></div><label className="admin-label">Name<input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></label><label className="admin-label">Role / tagline<input value={profile.role} onChange={(e) => setProfile({ ...profile, role: e.target.value })} /></label><label className="admin-label">Bio<textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} rows="4" /></label></section>
 
